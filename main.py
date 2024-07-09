@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 import pandas as pd
 import json
+from sklearn.metrics.pairwise import cosine_similarity
+from typing import List
+
 
 movies = pd.read_csv('./movies_dataset.csv')
 movies_credits = pd.read_csv('./credits.csv')
@@ -150,6 +153,16 @@ def get_director(nombre_director):
         mensaje_retorno = f"El director {nombre_director.capitalize()} no ha dirigido ninguna película."
     
     return mensaje_retorno
+
+
+movie_vectors = movies[['vote_average']].values
+similarity_matrix = cosine_similarity(movie_vectors, movie_vectors)
+indices_similares = similarity_matrix.argsort(axis=1)[:, ::-1]
+@app.get("/recomendacion")
+def recomendacion(titulo: str) -> List[str]:
+    idx = movies[movies['title'] == titulo].index[0]
+    indices_top = indices_similares[idx, 1:6]  #Excluimos la película misma, obtenemos las siguientes 5 más similares
+    return list(movies.iloc[indices_top]['title'])
 
 if __name__ == "__main__":
     import uvicorn
