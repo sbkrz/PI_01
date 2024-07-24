@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 import pandas as pd
+import numpy as np
 import json
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
 from typing import List
 
 
@@ -100,24 +102,26 @@ def load_json(x):
     return []
 movies_credits['cast'] = movies_credits['cast'].apply(load_json)
 
+movies_combined = pd.concat([movies_credits.reset_index(drop=True), movies[['return']].reset_index(drop=True)], axis=1)
+
 @app.get("/get_actor/{nombre_actor}")
 def get_actor(nombre_actor):
     actor_found = False
     total_films = 0
     total_return = 0.0
 
-    for index, row in movies_credits.iterrows():
-            for actor in row['cast']:
-                if actor['name'] == nombre_actor:
-                    actor_found = True
-                    total_films += 1
-                    total_return += row.get('return', 0.0)
+    for index, row in movies_combined.iterrows():
+        for actor in row['cast']:
+            if actor['name'] == nombre_actor:
+                actor_found = True
+                total_films += 1
+                total_return += row.get('return', 0.0)
 
     if not actor_found:
-            return f"El actor {nombre_actor} no ha sido encontrado en el dataset."
+        return f"El actor {nombre_actor} no ha sido encontrado en el dataset."
 
     if total_films == 0:
-            return f"El actor {nombre_actor} no ha participado en ninguna filmación."
+        return f"El actor {nombre_actor} no ha participado en ninguna filmación."
 
     average_return = total_return / total_films
     return f"El actor {nombre_actor} ha participado en {total_films} filmaciones. Ha conseguido un retorno total de {total_return} con un promedio de {average_return} por filmación."
@@ -155,14 +159,19 @@ def get_director(nombre_director):
     return mensaje_retorno
 
 
-movie_vectors = movies[['vote_average']].values
-similarity_matrix = cosine_similarity(movie_vectors, movie_vectors)
-indices_similares = similarity_matrix.argsort(axis=1)[:, ::-1]
+movies['overview'] = movies['overview'].fillna('')
+tfidf = TfidfVectorizer(stop_words='english')
+tfidf_matrix = tfidf.fit_transform(movies['overview'])
+cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+
 @app.get("/recomendacion")
-def recomendacion(titulo: str) -> List[str]:
-    idx = movies[movies['title'] == titulo].index[0]
-    indices_top = indices_similares[idx, 1:6]  #Excluimos la película misma, obtenemos las siguientes 5 más similares
-    return list(movies.iloc[indices_top]['title'])
+def recomendacion(title):
+    idx = movies.index[movies['title'] == title].tolist()[0]
+    sim_scores = list(enumerate(cosine_sim[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+    sim_scores = sim_scores[1:6] 
+    movie_indices = [i[0] for i in sim_scores]
+    return movies['title'].iloc[movie_indices]
 
 if __name__ == "__main__":
     import uvicorn
