@@ -173,6 +173,6 @@ def recomendacion(title):
     movie_indices = [i[0] for i in sim_scores]
     return movies['title'].iloc[movie_indices]
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+# if __name__ == "__main__":
+    # import uvicorn
+    # uvicorn.run(app, host="127.0.0.1", port=8000)
